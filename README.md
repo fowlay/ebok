@@ -1,2 +1,2 @@
 # ebok
-Simple accounting helper
+Simple accounting helper.

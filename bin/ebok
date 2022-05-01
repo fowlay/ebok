@@ -1,0 +1,8 @@
+#! /bin/bash
+
+
+declare -r ScriptDir=$(dirname $0)
+declare -r EbinDir=$(readlink -f $ScriptDir/../ebin)
+
+
+erl -noshell -pa $EbinDir -run ebok ebok x y -run init stop
