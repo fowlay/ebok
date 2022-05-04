@@ -9,14 +9,51 @@
 %% ====================================================================
 %% API functions
 %% ====================================================================
--export([]).
+-export([start/0, load/0, save/0, stop/0, book/5, tell/0]).
+
+-define(SERVER, ?MODULE).
+-define(PERSISTENT, "ebok.txt").
+
+start() ->
+    gen_server:start({local, ?SERVER}, ?MODULE, [], []).
+
+load() ->
+    gen_server:call(?SERVER, load).
+
+save() ->
+    gen_server:call(?SERVER, save).
+
+stop() ->
+    gen_server:call(?SERVER, stop).
+
+book(earnings, Year, Month, Day, Amount) ->
+    Ores = trunc(Amount*100),
+    gen_server:call(?SERVER, {book, earnings, {Year, Month, Day}, Ores}),
+    ok;
+
+book(cost, Year, Month, Day, Amount) ->
+    Ores = trunc(Amount*100),
+    gen_server:call(?SERVER, {book, cost, {Year, Month, Day}, Ores}),
+    ok.
+
+tell() ->
+    gen_server:call(?SERVER, tell).
 
 
 
 %% ====================================================================
 %% Behavioural functions
 %% ====================================================================
--record(state, {}).
+-record(state,
+        {dict = orddict:new(),
+         file = ?PERSISTENT
+         }).
+
+-record(key,
+        {seq :: integer(),
+         date :: calendar:date(),
+         type :: cost|earnings|accrual
+        }).
 
 %% init/1
 %% ====================================================================
@@ -51,7 +88,53 @@ init([]) ->
 	Timeout :: non_neg_integer() | infinity,
 	Reason :: term().
 %% ====================================================================
-handle_call(Request, From, State) ->
+
+handle_call({book, earnings, {Y, M, D}, Amount}, _From, #state{dict = Dict} = State) ->
+    Seq = {Y, get_next_number(Dict, Y)},
+    Key = #key{seq = Seq, date = {M, D}, type = earnings},
+    NewDict = orddict:store(Key, Amount, Dict),
+    {reply, ok, State#state{dict = NewDict}};
+
+handle_call({book, cost, {Y, M, D}, Amount}, _From, #state{dict = Dict} = State) ->
+        Seq = {Y, get_next_number(Dict, Y)},
+    Key = #key{seq = Seq, date = {M, D}, type = cost},
+    NewDict = orddict:store(Key, Amount, Dict),
+    {reply, ok, State#state{dict = NewDict}};
+
+handle_call(tell, _From, State) ->
+    {reply, State, State};
+
+handle_call(save, _From, #state{file = File, dict = Dict} = State) ->
+    try
+        {ok, Stream} = file:open(File, [write]),
+        orddict:fold(
+          fun(K, V, _Acc) ->
+                  io:fwrite(Stream, "~p.~n", [{K, V}])
+          end,
+          ignore,
+          Dict),
+        file:close(Stream),
+        {reply, ok, State}
+    catch
+        X:Y:Stack ->
+            {reply, {nok, {X, Y, Stack}}, State}
+    end;
+
+handle_call(load, _From, #state{file = File} = State) ->
+    try
+        {ok, Stream} = file:open(File, [read]),
+        Dict = dict_from_stream(Stream, orddict:new()),
+        {reply, ok, State#state{dict = Dict}}
+    catch
+        X:Y:Stack ->
+            {reply, {nok, {X, Y, Stack}}, State}
+    end;
+
+handle_call(stop, _From, State) ->
+    Reply = stopped,
+    {stop, normal, Reply, State};
+
+handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
 
@@ -67,7 +150,7 @@ handle_call(Request, From, State) ->
 	NewState :: term(),
 	Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
-handle_cast(Msg, State) ->
+handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
@@ -82,7 +165,7 @@ handle_cast(Msg, State) ->
 	NewState :: term(),
 	Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
-handle_info(Info, State) ->
+handle_info(_Info, State) ->
     {noreply, State}.
 
 
@@ -95,7 +178,8 @@ handle_info(Info, State) ->
 			| {shutdown, term()}
 			| term().
 %% ====================================================================
-terminate(Reason, State) ->
+terminate(Reason, _State) ->
+    ebok:respond("~p stopping, reason: ~p", [?MODULE, Reason]),
     ok.
 
 
@@ -107,12 +191,32 @@ terminate(Reason, State) ->
 	OldVsn :: Vsn | {down, Vsn},
 	Vsn :: term().
 %% ====================================================================
-code_change(OldVsn, State, Extra) ->
+code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 
 %% ====================================================================
 %% Internal functions
 %% ====================================================================
+
+get_next_number(Dict, Y) ->
+    1 + orddict:fold(
+      fun(#key{seq = {U, M}}, _V, Acc) when U =:= Y andalso M > Acc ->
+              M;
+         (_, _V, Acc) ->
+              Acc
+      end,
+      0,
+      Dict).
+
+dict_from_stream(Stream, Dict) ->
+    case io:read(Stream, "") of
+        eof ->
+            Dict;
+        {ok, {K, V}} ->
+            NewDict = orddict:store(K, V, Dict),
+            dict_from_stream(Stream, NewDict)
+    end.
+
 
 
