@@ -9,7 +9,7 @@
 %% ====================================================================
 %% API functions
 %% ====================================================================
--export([start/0, load/0, save/0, stop/0, book/5, tell/0]).
+-export([start/0, load/0, save/0, stop/0, book/6, tell/0]).
 
 -define(SERVER, ?MODULE).
 -define(PERSISTENT, "ebok.txt").
@@ -26,14 +26,14 @@ save() ->
 stop() ->
     gen_server:call(?SERVER, stop).
 
-book(earnings, Year, Month, Day, Amount) ->
+book(earnings, Year, Month, Day, Amount, Comment) ->
     Ores = trunc(Amount*100),
-    gen_server:call(?SERVER, {book, earnings, {Year, Month, Day}, Ores}),
+    gen_server:call(?SERVER, {book, earnings, {Year, Month, Day}, Ores, Comment}),
     ok;
 
-book(cost, Year, Month, Day, Amount) ->
+book(cost, Year, Month, Day, Amount, Comment) ->
     Ores = trunc(Amount*100),
-    gen_server:call(?SERVER, {book, cost, {Year, Month, Day}, Ores}),
+    gen_server:call(?SERVER, {book, cost, {Year, Month, Day}, Ores, Comment}),
     ok.
 
 tell() ->
@@ -45,8 +45,8 @@ tell() ->
 %% Behavioural functions
 %% ====================================================================
 -record(state,
-        {dict = orddict:new(),
-         file = ?PERSISTENT
+        {dict=orddict:new(),
+         file=?PERSISTENT
          }).
 
 -record(key,
@@ -54,6 +54,12 @@ tell() ->
          date :: calendar:date(),
          type :: cost|earnings|accrual
         }).
+
+-record(value,
+        {ores :: integer(),
+         comment="" :: string()
+        }
+       ).
 
 %% init/1
 %% ====================================================================
@@ -89,22 +95,24 @@ init([]) ->
 	Reason :: term().
 %% ====================================================================
 
-handle_call({book, earnings, {Y, M, D}, Amount}, _From, #state{dict = Dict} = State) ->
+handle_call({book, earnings, {Y, M, D}, Amount, Comment}, _From, #state{dict=Dict}=State) ->
     Seq = {Y, get_next_number(Dict, Y)},
-    Key = #key{seq = Seq, date = {M, D}, type = earnings},
-    NewDict = orddict:store(Key, Amount, Dict),
-    {reply, ok, State#state{dict = NewDict}};
+    Key = #key{seq=Seq, date={M, D}, type=earnings},
+    CommentJoined = string:join(Comment, " "),
+    NewDict = orddict:store(Key, #value{ores=Amount, comment=CommentJoined}, Dict),
+    {reply, ok, State#state{dict=NewDict}};
 
-handle_call({book, cost, {Y, M, D}, Amount}, _From, #state{dict = Dict} = State) ->
-        Seq = {Y, get_next_number(Dict, Y)},
-    Key = #key{seq = Seq, date = {M, D}, type = cost},
-    NewDict = orddict:store(Key, Amount, Dict),
-    {reply, ok, State#state{dict = NewDict}};
+handle_call({book, cost, {Y, M, D}, Amount, Comment}, _From, #state{dict=Dict}=State) ->
+    Seq = {Y, get_next_number(Dict, Y)},
+    Key = #key{seq=Seq, date={M, D}, type=cost},
+    CommentJoined = string:join(Comment, " "),
+    NewDict = orddict:store(Key, #value{ores=Amount, comment=CommentJoined}, Dict),
+    {reply, ok, State#state{dict=NewDict}};
 
 handle_call(tell, _From, State) ->
     {reply, State, State};
 
-handle_call(save, _From, #state{file = File, dict = Dict} = State) ->
+handle_call(save, _From, #state{file=File, dict=Dict}=State) ->
     try
         {ok, Stream} = file:open(File, [write]),
         orddict:fold(
@@ -120,11 +128,11 @@ handle_call(save, _From, #state{file = File, dict = Dict} = State) ->
             {reply, {nok, {X, Y, Stack}}, State}
     end;
 
-handle_call(load, _From, #state{file = File} = State) ->
+handle_call(load, _From, #state{file=File}=State) ->
     try
         {ok, Stream} = file:open(File, [read]),
         Dict = dict_from_stream(Stream, orddict:new()),
-        {reply, ok, State#state{dict = Dict}}
+        {reply, ok, State#state{dict=Dict}}
     catch
         X:Y:Stack ->
             {reply, {nok, {X, Y, Stack}}, State}
@@ -201,7 +209,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 get_next_number(Dict, Y) ->
     1 + orddict:fold(
-      fun(#key{seq = {U, M}}, _V, Acc) when U =:= Y andalso M > Acc ->
+      fun(#key{seq={U, M}}, _V, Acc) when U =:= Y andalso M > Acc ->
               M;
          (_, _V, Acc) ->
               Acc

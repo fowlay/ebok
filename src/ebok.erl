@@ -38,7 +38,7 @@ wait_for_termination() ->
 
 -record(state,
         {master :: pid(),
-         year :: integer()|undefined
+         year=current_year() :: integer()
          }).
 
 %% init/1
@@ -55,7 +55,7 @@ wait_for_termination() ->
 %% ====================================================================
 init([Master]) ->
     {ok, _Pid} = backend:start(),
-    State = #state{master = Master},
+    State = #state{master=Master},
     {ok, State, ?TIMEOUT_ZERO}.
 
 
@@ -132,7 +132,7 @@ handle_info(_Info, State) ->
 			| {shutdown, term()}
 			| term().
 %% ====================================================================
-terminate(_Reason, #state{master = Master}) ->
+terminate(_Reason, #state{master=Master}) ->
     stopped = backend:stop(),
     Master ! stop,
     ok.
@@ -161,49 +161,52 @@ respond(Format, Data) ->
     io:fwrite(Format++"~n", Data).
 
 get_input() ->
-    RawLine = io:get_line("> "),
+    RawLine = io:get_line(user, "> "),
     Line = string:trim(RawLine),
     string:lexemes(Line, " ").
 
 dispatch(["q"], State) ->
+    %% quit
     {stop, normal, State};
 
 dispatch(["h"], State) ->
+    %% help
     respond("~p", [State]),
     BackendState = backend:tell(),
     respond("backend: ~p", [BackendState]),
     {noreply, State, ?TIMEOUT_ZERO};
 
 dispatch(["l"], State) ->
+    %% load
     Result = backend:load(),
     respond("result: ~p", [Result]),
     {noreply, State, ?TIMEOUT_ZERO};
 
 dispatch(["s"], State) ->
+    %% save
     Result = backend:save(),
     respond("result: ~p", [Result]),
     {noreply, State, ?TIMEOUT_ZERO};
 
-dispatch([Action, _MonthS, _DayS, _AmountS], #state{year = undefined}) when
-  Action =:= "e" orelse Action =:= "c" ->
-    throw(year_is_not_set);
-
-dispatch(["e", MonthS, DayS, AmountS], #state{year = Year} = State) ->
+dispatch(["e", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
+    %% book earnings
     Month = list_to_integer(MonthS),
     Day = list_to_integer(DayS),
     Amount = string_to_float(AmountS),
-    backend:book(earnings, Year, Month, Day, Amount),
+    backend:book(earnings, Year, Month, Day, Amount, Comment),
     {noreply, State, ?TIMEOUT_ZERO};
 
-dispatch(["c", MonthS, DayS, AmountS], #state{year = Year} = State) ->
+dispatch(["c", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
+    %% book a cost
     Month = list_to_integer(MonthS),
     Day = list_to_integer(DayS),
     Amount = string_to_float(AmountS),
-    backend:book(cost, Year, Month, Day, Amount),
+    backend:book(cost, Year, Month, Day, Amount, Comment),
     {noreply, State, ?TIMEOUT_ZERO};
 
 dispatch(["y", Year], State) ->
-    {noreply, State#state{year = list_to_integer(Year)}, ?TIMEOUT_ZERO};
+    %% set year
+    {noreply, State#state{year=list_to_integer(Year)}, ?TIMEOUT_ZERO};
 
 dispatch(_, State) ->
     respond("not understood"),
@@ -223,4 +226,12 @@ string_to_float(X) ->
         _ ->
             string_to_float(X++".0")
     end.
+
+current_year() ->
+    {{Year, _, _}, _} =
+        calendar:system_time_to_local_time(
+          erlang:system_time(seconds), seconds),
+    Year.
+
+    
 
