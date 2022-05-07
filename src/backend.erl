@@ -9,13 +9,21 @@
 %% ====================================================================
 %% API functions
 %% ====================================================================
--export([start/0, load/0, save/0, stop/0, book/6, tell/0]).
+-export([start/3,
+         load/0,
+         save/0,
+         stop/0,
+         book/6,
+         get_book/1,
+         summary/1,
+         set_verbose/1,
+         tell/0]).
 
 -define(SERVER, ?MODULE).
--define(PERSISTENT, "ebok.txt").
+-define(FILE_PREFIX, "ebok-").
 
-start() ->
-    gen_server:start({local, ?SERVER}, ?MODULE, [], []).
+start(Master, Dir, Vat) ->
+    gen_server:start({local, ?SERVER}, ?MODULE, [Master, Dir, Vat], []).
 
 load() ->
     gen_server:call(?SERVER, load).
@@ -27,14 +35,29 @@ stop() ->
     gen_server:call(?SERVER, stop).
 
 book(earnings, Year, Month, Day, Amount, Comment) ->
-    Ores = trunc(Amount*100),
-    gen_server:call(?SERVER, {book, earnings, {Year, Month, Day}, Ores, Comment}),
+    %% Amount is SEK, VAT included
+    Sek = Amount,
+    gen_server:call(?SERVER, {book, earnings, {Year, Month, Day}, Sek, Comment}),
     ok;
 
 book(cost, Year, Month, Day, Amount, Comment) ->
-    Ores = trunc(Amount*100),
-    gen_server:call(?SERVER, {book, cost, {Year, Month, Day}, Ores, Comment}),
+    Sek = Amount,
+    gen_server:call(?SERVER, {book, cost, {Year, Month, Day}, Sek, Comment}),
+    ok;
+
+book(accrual, Year, Month, Day, Amount, Comment) ->
+    Sek = Amount,
+    gen_server:call(?SERVER, {book, accrual, {Year, Month, Day}, Sek, Comment}),
     ok.
+
+get_book(Year) ->
+    gen_server:call(?SERVER, {get_book, Year}).
+
+summary(Year) ->
+    gen_server:call(?SERVER, {summary, Year}).
+
+set_verbose(Verbose) ->
+    gen_server:call(?SERVER, {set_verbose, Verbose}).
 
 tell() ->
     gen_server:call(?SERVER, tell).
@@ -45,9 +68,12 @@ tell() ->
 %% Behavioural functions
 %% ====================================================================
 -record(state,
-        {dict=orddict:new(),
-         file=?PERSISTENT
-         }).
+        {master :: pid(),
+         dict=orddict:new(),
+         dir="" :: string(),
+         verbose=0 :: integer(),
+         vat=0.0 :: float()
+        }).
 
 -record(key,
         {seq :: integer(),
@@ -56,7 +82,7 @@ tell() ->
         }).
 
 -record(value,
-        {ores :: integer(),
+        {sek :: float(),
          comment="" :: string()
         }
        ).
@@ -73,8 +99,13 @@ tell() ->
 	State :: term(),
 	Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
-init([]) ->
-    {ok, #state{}}.
+init([Master, Dir, Vat]) ->
+    case filelib:is_dir(Dir) of
+        false ->
+            {stop, {not_a_directory, Dir}};
+        true ->
+            {ok, #state{master=Master, dir=Dir, vat=Vat}}
+    end.
 
 
 %% handle_call/3
@@ -99,22 +130,71 @@ handle_call({book, earnings, {Y, M, D}, Amount, Comment}, _From, #state{dict=Dic
     Seq = {Y, get_next_number(Dict, Y)},
     Key = #key{seq=Seq, date={M, D}, type=earnings},
     CommentJoined = string:join(Comment, " "),
-    NewDict = orddict:store(Key, #value{ores=Amount, comment=CommentJoined}, Dict),
+    NewDict = orddict:store(Key, #value{sek=Amount, comment=CommentJoined}, Dict),
     {reply, ok, State#state{dict=NewDict}};
 
 handle_call({book, cost, {Y, M, D}, Amount, Comment}, _From, #state{dict=Dict}=State) ->
     Seq = {Y, get_next_number(Dict, Y)},
     Key = #key{seq=Seq, date={M, D}, type=cost},
     CommentJoined = string:join(Comment, " "),
-    NewDict = orddict:store(Key, #value{ores=Amount, comment=CommentJoined}, Dict),
+    NewDict = orddict:store(Key, #value{sek=Amount, comment=CommentJoined}, Dict),
     {reply, ok, State#state{dict=NewDict}};
+
+handle_call({book, accrual, {Y, M, D}, Amount, Comment}, _From, #state{dict=Dict}=State) ->
+    Seq = {Y, get_next_number(Dict, Y)},
+    Key = #key{seq=Seq, date={M, D}, type=accrual},
+    CommentJoined = string:join(Comment, " "),
+    NewDict = orddict:store(Key, #value{sek=Amount, comment=CommentJoined}, Dict),
+    {reply, ok, State#state{dict=NewDict}};
+
+handle_call({get_book, Year}, _From, #state{dict=Dict}=State) ->
+    Result =
+        lists:reverse(
+          orddict:fold(
+            fun(#key{date={Y, _, _}}, _, Acc) when Y =/= Year ->
+                    Acc;
+               (#key{seq=Seq, date=Date, type=Type}, #value{sek=Sek, comment=Comment}, Acc) ->
+                    [{Seq, Date, Type, Sek, Comment}|Acc]
+            end,
+            [],
+            Dict)),
+    {reply, Result, State};
+
+handle_call({summary, Year}, _From, #state{dict=Dict, vat=Vat}=State) ->
+    VatFrac = Vat/(100.0 + Vat),
+    NetFrac = 100.0/(100.0 + Vat),
+    A = 
+        orddict:fold(
+          fun(#key{date={Y, _, _}}, _, Acc) when Y =/= Year ->
+                  Acc;
+             (#key{type=earnings}, #value{sek=Sek}, Acc) ->
+                  maps_acc(outgVat, VatFrac*Sek,
+                           maps_acc(earningsNet, NetFrac*Sek, Acc));
+             
+             (#key{type=cost}, #value{sek=Sek}, Acc) ->
+                  maps_acc(incVat, VatFrac*Sek,
+                           maps_acc(costNet, NetFrac*Sek, Acc));
+             
+             %% handle non-default VAT costs here when needed
+
+         (#key{type=accrual}, #value{sek=Sek}, Acc) ->
+              maps_acc(earningsNet, Sek, Acc)
+      end,
+      #{},
+      Dict),
+
+    {reply, A, State};
+
+handle_call({set_verbose, NewVerbose}, _From, #state{verbose=Verbose}=State) ->
+    {reply, {Verbose, NewVerbose}, State#state{verbose=NewVerbose}};
 
 handle_call(tell, _From, State) ->
     {reply, State, State};
 
-handle_call(save, _From, #state{file=File, dict=Dict}=State) ->
+handle_call(save, _From, #state{dir=Dir, dict=Dict}=State) ->
+    Path = filename:join(Dir, get_basename(Dir, 1)),
     try
-        {ok, Stream} = file:open(File, [write]),
+        {ok, Stream} = file:open(Path, [write]),
         orddict:fold(
           fun(K, V, _Acc) ->
                   io:fwrite(Stream, "~p.~n", [{K, V}])
@@ -128,9 +208,10 @@ handle_call(save, _From, #state{file=File, dict=Dict}=State) ->
             {reply, {nok, {X, Y, Stack}}, State}
     end;
 
-handle_call(load, _From, #state{file=File}=State) ->
+handle_call(load, _From, #state{dir=Dir}=State) ->
     try
-        {ok, Stream} = file:open(File, [read]),
+        Path = filename:join(Dir, get_basename(Dir, 0)),
+        {ok, Stream} = file:open(Path, [read]),
         Dict = dict_from_stream(Stream, orddict:new()),
         {reply, ok, State#state{dict=Dict}}
     catch
@@ -186,9 +267,8 @@ handle_info(_Info, State) ->
 			| {shutdown, term()}
 			| term().
 %% ====================================================================
-terminate(Reason, _State) ->
-    ebok:respond("~p stopping, reason: ~p", [?MODULE, Reason]),
-    ok.
+terminate(Reason, State) ->
+    verbose(State, "~p stopping, reason: ~p", [?MODULE, Reason]).
 
 
 %% code_change/3
@@ -206,6 +286,11 @@ code_change(_OldVsn, State, _Extra) ->
 %% ====================================================================
 %% Internal functions
 %% ====================================================================
+
+maps_acc(Key, Amount, Map) ->
+    NewAmount = maps:get(Key, Map, 0) + Amount,
+    maps:put(Key, NewAmount, Map).
+
 
 get_next_number(Dict, Y) ->
     1 + orddict:fold(
@@ -226,5 +311,28 @@ dict_from_stream(Stream, Dict) ->
             dict_from_stream(Stream, NewDict)
     end.
 
+get_basename(Dir, Incr) ->
+    case file:list_dir(Dir) of
+        {ok, []} ->
+            ?FILE_PREFIX ++ "0001";
+        {ok, Names} ->
+            Highest =
+            lists:foldl(
+              fun(S, A) ->
+                      K =
+                          list_to_integer(
+                            lists:filter(fun(C) -> C >= $0 andalso C =< $9 end, S)),
+                      if K > A -> K; true -> A end
+              end,
+              0,
+              Names),
+            lists:flatten(io_lib:format("~s~4..0w", [?FILE_PREFIX, Highest+Incr]))                       
+    end.
 
-
+verbose(State, Format, Data) ->
+    if
+        State#state.verbose < 1 ->
+            ok;
+        true ->
+            io:fwrite(Format++"~n", Data)
+    end.

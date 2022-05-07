@@ -1,13 +1,13 @@
 #! /bin/bash
 
-# Provide a high-level help action
-# Provide a debug action
+# User-friendly input device .. how? Use werl? Emacs?
+# Periodic checkpointing
 
-# Automated file names
-# Default path
-
-# User-friendly input device .. how? Use werl?
-
+# DONE: Provide a high-level help action
+# DONE: Provide a verbose level
+# DONE: Separation: Independent trace printout from backend
+# DONE: Automated file names
+# DONE: Directory path
 # DONE: Operations descriptions in the 'ebok' module
 # DONE: Operations descriptions in the 'backend' module
 # DONE: Provide defaults: year
@@ -16,4 +16,4 @@
 declare -r ScriptDir=$(dirname $0)
 declare -r EbinDir=$(readlink -f $ScriptDir/../ebin)
 
-erl -noshell -pa $EbinDir -run ebok ebok x y -run init stop
+erl -noshell -pa $EbinDir -run ebok ebok $*

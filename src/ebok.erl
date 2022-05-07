@@ -13,23 +13,40 @@
 
 -export([respond/1, respond/2]).
 
-ebok(_Args) ->
-    %% io:fwrite("args: ~p~n", [Args]),
-    _Pid = start(),
+-define(VAT, 25.0).
+
+
+help() ->
+    ["  c MON DAY AMT COMMENT...         book cost",
+     "  e MON DAY AMT COMMENT...         book earnings",
+     "  a MON DAY SIGNED_AMT COMMENT...  book accrual",
+     "  B                                book print",
+     "  S                                summary",
+     "  y YEAR                           specify year",
+     "  h                                this help",
+     "  v INCR                           verbosity change",
+     "  l                                load",
+     "  s                                save",
+     "  q                                quit"
+     ].
+
+ebok([Dir]) ->
+    start(Dir),
     wait_for_termination().
 
-start() ->
-    {ok, Pid} = gen_server:start(?MODULE, [self()], []),
-    Pid.
+start(Dir) ->
+    case gen_server:start(?MODULE, [self(), Dir], []) of
+        {error, _} ->
+            self() ! stop;
+        {ok, _Pid} ->
+            ok
+    end.
 
 wait_for_termination() ->
-    receive stop -> ok end,
-    respond("terminate!").
-
-
-
-
-
+    receive
+        stop ->
+            init:stop()
+    end.
 
 %% ====================================================================
 %% Behavioural functions
@@ -38,7 +55,8 @@ wait_for_termination() ->
 
 -record(state,
         {master :: pid(),
-         year=current_year() :: integer()
+         year=current_year() :: integer(),
+         verbose=0 :: integer()
          }).
 
 %% init/1
@@ -53,10 +71,15 @@ wait_for_termination() ->
 	State :: term(),
 	Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
-init([Master]) ->
-    {ok, _Pid} = backend:start(),
-    State = #state{master=Master},
-    {ok, State, ?TIMEOUT_ZERO}.
+init([Master, Dir]) ->
+    case backend:start(self(), Dir, ?VAT) of
+        {error, Reason} ->
+            respond("fatal: ~p", [Reason]),
+            {stop, Reason};
+        {ok, _Pid} ->
+            State = #state{master=Master},
+            {ok, State, ?TIMEOUT_ZERO}
+    end.
 
 
 %% handle_call/3
@@ -110,7 +133,11 @@ handle_cast(_Msg, State) ->
 
 handle_info(timeout, State) ->
     Lexemes = get_input(),
-    respond("Input: ~p", [Lexemes]),
+    if
+        State#state.verbose > 0 ->
+            respond("Input: ~p", [Lexemes]);
+        true -> ok
+    end,
     try
         dispatch(Lexemes, State)
     catch
@@ -165,16 +192,29 @@ get_input() ->
     Line = string:trim(RawLine),
     string:lexemes(Line, " ").
 
+dispatch(["h"], #state{verbose=Verbose}=State) ->
+    %% help
+    lists:foreach(fun(S) -> respond(S) end, help()),
+    
+    if
+        Verbose > 0 ->
+            respond("~p", [State]),
+            BackendState = backend:tell(),
+            respond("backend: ~p", [BackendState]);
+        true ->
+            ok
+    end,
+    {noreply, State, ?TIMEOUT_ZERO};
+
 dispatch(["q"], State) ->
     %% quit
     {stop, normal, State};
 
-dispatch(["h"], State) ->
-    %% help
-    respond("~p", [State]),
-    BackendState = backend:tell(),
-    respond("backend: ~p", [BackendState]),
-    {noreply, State, ?TIMEOUT_ZERO};
+dispatch(["v", Incr], #state{verbose=Verbose}=State) ->
+    %% update verbosity
+    NewVerbose = Verbose + list_to_integer(Incr),
+    backend:set_verbose(NewVerbose),
+    {noreply, State#state{verbose=NewVerbose}, ?TIMEOUT_ZERO};
 
 dispatch(["l"], State) ->
     %% load
@@ -204,6 +244,26 @@ dispatch(["c", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
     backend:book(cost, Year, Month, Day, Amount, Comment),
     {noreply, State, ?TIMEOUT_ZERO};
 
+dispatch(["a", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
+    %% book accrual
+    Month = list_to_integer(MonthS),
+    Day = list_to_integer(DayS),
+    Amount = string_to_float(AmountS),
+    backend:book(accrual, Year, Month, Day, Amount, Comment),
+    {noreply, State, ?TIMEOUT_ZERO};
+
+dispatch(["S"], #state{year=Year}=State) ->
+    %% print summary
+    Summary = backend:summary(Year),
+    print_summary(Summary),
+    {noreply, State, ?TIMEOUT_ZERO};
+
+dispatch(["B"], #state{year=Year}=State) ->
+    %% print book
+    Book = backend:get_book(Year),
+    print_book(Book),
+    {noreply, State, ?TIMEOUT_ZERO};
+
 dispatch(["y", Year], State) ->
     %% set year
     {noreply, State#state{year=list_to_integer(Year)}, ?TIMEOUT_ZERO};
@@ -214,24 +274,37 @@ dispatch(_, State) ->
 
 
 string_to_float(X) ->
-    case string:to_float(X) of
-        {error, no_float} ->
-            string_to_float(X++".0");
-        {U, []} when is_float(U) ->
-            U;
-        {U, Rest} when is_float(U) ->
-            throw({bad_number, {X, Rest}});
-        {error, Reason} ->
-            throw({bad_number, {X, Reason}});
-        _ ->
-            string_to_float(X++".0")
+    try
+        K = list_to_integer(X),
+        float(K)
+    catch
+        error:badarg ->
+            list_to_float(X)
     end.
+
+print_book(B) ->
+    lists:foreach(
+      fun({{Year, J}, {Mon, Day}, Type, Sek, Comment}) ->
+              respond("~3w  ~4w-~2..0w-~2..0w  ~10s ~10.2f  ~s~n",
+                      [J, Year, Mon, Day, Type, Sek, Comment])
+      end,
+      B).
+              
+
+print_summary(R) ->
+    respond("summary:~n"
+            "earnings net: ~.2f~n"
+            "    outg VAT: ~.2f~n"
+            "    cost net: ~.2f~n"
+            "     inc VAT: ~.2f~n",
+            [float(maps:get(earningsNet, R, 0)),
+             float(maps:get(outgVat, R, 0)),
+             float(maps:get(costNet, R, 0)),
+             float(maps:get(incVat, R, 0))
+            ]).
 
 current_year() ->
     {{Year, _, _}, _} =
         calendar:system_time_to_local_time(
           erlang:system_time(seconds), seconds),
     Year.
-
-    
-
