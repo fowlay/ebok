@@ -1,5 +1,7 @@
 #! /bin/bash
 
+declare -r DirDefault=~/wh/admin/ebok
+
 # User-friendly input device .. how? Use werl? Emacs?
 # Periodic checkpointing
 
@@ -14,6 +16,23 @@
 # DONE: Support a comment tail in e and c
 
 declare -r ScriptDir=$(dirname $0)
-declare -r EbinDir=$(readlink -f $ScriptDir/../ebin)
 
-erl -noshell -pa $EbinDir -run ebok ebok $*
+if [[ $# -gt 0 ]]; then
+    declare Dir="$1"; shift
+else
+    declare Dir="$DirDefault"
+fi
+mkdir -p "$Dir"
+
+if [[ $(uname --operating-system) == 'Cygwin' ]]; then
+    declare -r EbinDir=$(cygpath -w $(readlink -f $ScriptDir/../ebin))
+    Dir=$(cygpath -w "$Dir")
+else
+    declare -r EbinDir=$(readlink -f $ScriptDir/../ebin)
+fi
+
+if [[ $# -gt 0 ]]; then
+    shift
+fi
+
+erl -noshell -pa $EbinDir -run ebok ebok "$Dir" $*

@@ -132,7 +132,7 @@ handle_cast(_Msg, State) ->
 %% ====================================================================
 
 handle_info(timeout, State) ->
-    Lexemes = get_input(),
+    Lexemes = get_input(State#state.year),
     if
         State#state.verbose > 0 ->
             respond("Input: ~p", [Lexemes]);
@@ -187,8 +187,9 @@ respond(String) ->
 respond(Format, Data) ->
     io:fwrite(Format++"~n", Data).
 
-get_input() ->
-    RawLine = io:get_line(user, "> "),
+get_input(Year) ->
+    Prompt = lists:flatten(io_lib:format("~w> ", [Year])),
+    RawLine = io:get_line(user, Prompt),
     Line = string:trim(RawLine),
     string:lexemes(Line, " ").
 
