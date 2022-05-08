@@ -72,9 +72,13 @@ tell() ->
          vat=0.0 :: float()
         }).
 
+-type year() :: integer().
+-type month() :: 1..12.
+-type day() :: 1..31.
+
 -record(key,
-        {seq :: integer(),
-         date :: calendar:date(),
+        {seq :: {year(), integer()},
+         date :: {month(), day()},
          type :: cost|earnings|accrual
         }).
 
@@ -148,7 +152,7 @@ handle_call({get_book, Year}, _From, #state{dict=Dict}=State) ->
     Result =
         lists:reverse(
           orddict:fold(
-            fun(#key{date={Y, _, _}}, _, Acc) when Y =/= Year ->
+            fun(#key{seq={Y, _}}, _, Acc) when Y =/= Year ->
                     Acc;
                (#key{seq=Seq, date=Date, type=Type}, #value{sek=Sek, comment=Comment}, Acc) ->
                     [{Seq, Date, Type, Sek, Comment}|Acc]
@@ -162,7 +166,7 @@ handle_call({summary, Year}, _From, #state{dict=Dict, vat=Vat}=State) ->
     NetFrac = 100.0/(100.0 + Vat),
     A = 
         orddict:fold(
-          fun(#key{date={Y, _, _}}, _, Acc) when Y =/= Year ->
+          fun(#key{seq={Y, _}}, _, Acc) when Y =/= Year ->
                   Acc;
              (#key{type=earnings}, #value{sek=Sek}, Acc) ->
                   maps_acc(outgVat, VatFrac*Sek,
