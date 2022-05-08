@@ -28,7 +28,9 @@ help() ->
      "  l                                load",
      "  s                                save",
      "  q                                quit",
-     "  Q                                forced quit"
+     "  Q                                forced quit",
+    
+     "  x   XML test"
      ].
 
 ebok([Dir]) ->
@@ -286,6 +288,11 @@ dispatch(["B"], #state{year=Year}=State) ->
 dispatch(["y", Year], State) ->
     %% set year
     {noreply, State#state{year=list_to_integer(Year)}, ?TIMEOUT_ZERO};
+
+dispatch(["x"], State) ->
+    %% XML test
+    xml_io:generate(State#state.year, 8.79, 9.79, 10.79, 11.79),
+    {noreply, State, ?TIMEOUT_ZERO};
 
 dispatch(_, State) ->
     respond("not understood"),
