@@ -27,7 +27,8 @@ help() ->
      "  v INCR                           verbosity change",
      "  l                                load",
      "  s                                save",
-     "  q                                quit"
+     "  q                                quit",
+     "  Q                                forced quit"
      ].
 
 ebok([Dir]) ->
@@ -56,7 +57,8 @@ wait_for_termination() ->
 -record(state,
         {master :: pid(),
          year=current_year() :: integer(),
-         verbose=0 :: integer()
+         verbose=0 :: integer(),
+         saved="" :: string()
          }).
 
 %% init/1
@@ -131,8 +133,8 @@ handle_cast(_Msg, State) ->
 	Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 
-handle_info(timeout, State) ->
-    Lexemes = get_input(State#state.year),
+handle_info(timeout, #state{saved=Saved, year=Year}=State) ->
+    Lexemes = get_input(Saved, Year),
     if
         State#state.verbose > 0 ->
             respond("Input: ~p", [Lexemes]);
@@ -187,8 +189,8 @@ respond(String) ->
 respond(Format, Data) ->
     io:fwrite(Format++"~n", Data).
 
-get_input(Year) ->
-    Prompt = lists:flatten(io_lib:format("~w> ", [Year])),
+get_input(Saved, Year) ->
+    Prompt = lists:flatten(io_lib:format("~s~w> ", [Saved, Year])),
     RawLine = io:get_line(user, Prompt),
     Line = string:trim(RawLine),
     string:lexemes(Line, " ").
@@ -207,8 +209,17 @@ dispatch(["h"], #state{verbose=Verbose}=State) ->
     end,
     {noreply, State, ?TIMEOUT_ZERO};
 
+dispatch(["q"], #state{saved="* "}=State) ->
+    %% unsaved data warning
+    respond("unsaved data, try 'h' for help"),
+    {noreply, State, ?TIMEOUT_ZERO};
+
 dispatch(["q"], State) ->
     %% quit
+    {stop, normal, State};
+
+dispatch(["Q"], State) ->
+    %% forced quit
     {stop, normal, State};
 
 dispatch(["v", Incr], #state{verbose=Verbose}=State) ->
@@ -219,15 +230,22 @@ dispatch(["v", Incr], #state{verbose=Verbose}=State) ->
 
 dispatch(["l"], State) ->
     %% load
-    Result = backend:load(),
-    respond("result: ~p", [Result]),
-    {noreply, State, ?TIMEOUT_ZERO};
+    case backend:load() of
+        {nok, Details} ->
+            respond("loading failed: ~p", [Details]);
+        ok ->
+             {noreply, State#state{saved=""}, ?TIMEOUT_ZERO}
+    end;
 
 dispatch(["s"], State) ->
     %% save
-    Result = backend:save(),
-    respond("result: ~p", [Result]),
-    {noreply, State, ?TIMEOUT_ZERO};
+    case backend:save() of
+        {nok, Details} ->
+            respond("saving failed: ~p", [Details]),
+            {noreply, State, ?TIMEOUT_ZERO};
+        ok ->
+            {noreply, State#state{saved=""}, ?TIMEOUT_ZERO}
+    end;
 
 dispatch(["e", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
     %% book earnings
@@ -235,7 +253,7 @@ dispatch(["e", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
     Day = list_to_integer(DayS),
     Amount = string_to_float(AmountS),
     backend:book(earnings, Year, Month, Day, Amount, Comment),
-    {noreply, State, ?TIMEOUT_ZERO};
+    {noreply, State#state{saved="* "}, ?TIMEOUT_ZERO};
 
 dispatch(["c", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
     %% book a cost
@@ -243,7 +261,7 @@ dispatch(["c", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
     Day = list_to_integer(DayS),
     Amount = string_to_float(AmountS),
     backend:book(cost, Year, Month, Day, Amount, Comment),
-    {noreply, State, ?TIMEOUT_ZERO};
+    {noreply, State#state{saved="* "}, ?TIMEOUT_ZERO};
 
 dispatch(["a", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
     %% book accrual
@@ -251,7 +269,7 @@ dispatch(["a", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
     Day = list_to_integer(DayS),
     Amount = string_to_float(AmountS),
     backend:book(accrual, Year, Month, Day, Amount, Comment),
-    {noreply, State, ?TIMEOUT_ZERO};
+    {noreply, State#state{saved="* "}, ?TIMEOUT_ZERO};
 
 dispatch(["S"], #state{year=Year}=State) ->
     %% print summary

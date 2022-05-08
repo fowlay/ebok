@@ -37,18 +37,15 @@ stop() ->
 book(earnings, Year, Month, Day, Amount, Comment) ->
     %% Amount is SEK, VAT included
     Sek = Amount,
-    gen_server:call(?SERVER, {book, earnings, {Year, Month, Day}, Sek, Comment}),
-    ok;
+    gen_server:call(?SERVER, {book, earnings, {Year, Month, Day}, Sek, Comment});
 
 book(cost, Year, Month, Day, Amount, Comment) ->
     Sek = Amount,
-    gen_server:call(?SERVER, {book, cost, {Year, Month, Day}, Sek, Comment}),
-    ok;
+    gen_server:call(?SERVER, {book, cost, {Year, Month, Day}, Sek, Comment});
 
 book(accrual, Year, Month, Day, Amount, Comment) ->
     Sek = Amount,
-    gen_server:call(?SERVER, {book, accrual, {Year, Month, Day}, Sek, Comment}),
-    ok.
+    gen_server:call(?SERVER, {book, accrual, {Year, Month, Day}, Sek, Comment}).
 
 get_book(Year) ->
     gen_server:call(?SERVER, {get_book, Year}).

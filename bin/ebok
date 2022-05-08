@@ -5,6 +5,7 @@ declare -r DirDefault=~/wh/admin/ebok
 # User-friendly input device .. how? Use werl? Emacs?
 # Periodic checkpointing
 
+# DONE: Prompt shows saved/unsaved state
 # DONE: Provide a high-level help action
 # DONE: Provide a verbose level
 # DONE: Separation: Independent trace printout from backend
