@@ -14,6 +14,7 @@
 -export([respond/1, respond/2]).
 
 -define(VAT, 25.0).
+-define(ZERO, 0.0).
 
 
 help() ->
@@ -197,6 +198,9 @@ get_input(Saved, Year) ->
     Line = string:trim(RawLine),
     string:lexemes(Line, " ").
 
+dispatch([], State) ->
+    {noreply, State, ?TIMEOUT_ZERO};
+
 dispatch(["h"], #state{verbose=Verbose}=State) ->
     %% help
     lists:foreach(fun(S) -> respond(S) end, help()),
@@ -289,9 +293,17 @@ dispatch(["y", Year], State) ->
     %% set year
     {noreply, State#state{year=list_to_integer(Year)}, ?TIMEOUT_ZERO};
 
-dispatch(["x"], State) ->
-    %% XML test
-    xml_io:generate(State#state.year, 8.79, 9.79, 10.79, 11.79),
+dispatch(["x"], #state{year=Year}=State) ->
+    %% generate XML file with VAT details
+    Map = backend:summary(Year),
+    OutgVat = maps:get(outgVat, Map, ?ZERO),
+    IncVat = maps:get(incVat, Map, ?ZERO),
+    File = xml_io:generate(Year,
+                    maps:get(earningsNetNoAccrual, Map, ?ZERO),
+                    OutgVat,
+                    IncVat,
+                    OutgVat - IncVat),
+    respond("XML VAT report generated to: ~s", [File]),
     {noreply, State, ?TIMEOUT_ZERO};
 
 dispatch(_, State) ->
@@ -323,10 +335,10 @@ print_summary(R) ->
             "    outg VAT: ~.2f~n"
             "    cost net: ~.2f~n"
             "     inc VAT: ~.2f~n",
-            [float(maps:get(earningsNet, R, 0)),
-             float(maps:get(outgVat, R, 0)),
-             float(maps:get(costNet, R, 0)),
-             float(maps:get(incVat, R, 0))
+            [float(maps:get(earningsNet, R, ?ZERO)),
+             float(maps:get(outgVat, R, ?ZERO)),
+             float(maps:get(costNet, R, ?ZERO)),
+             float(maps:get(incVat, R, ?ZERO))
             ]).
 
 current_year() ->

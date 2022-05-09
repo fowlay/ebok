@@ -164,14 +164,15 @@ handle_call({get_book, Year}, _From, #state{dict=Dict}=State) ->
 handle_call({summary, Year}, _From, #state{dict=Dict, vat=Vat}=State) ->
     VatFrac = Vat/(100.0 + Vat),
     NetFrac = 100.0/(100.0 + Vat),
-    A = 
+    Map =
         orddict:fold(
           fun(#key{seq={Y, _}}, _, Acc) when Y =/= Year ->
                   Acc;
              (#key{type=earnings}, #value{sek=Sek}, Acc) ->
                   maps_acc(outgVat, VatFrac*Sek,
-                           maps_acc(earningsNet, NetFrac*Sek, Acc));
-             
+                           maps_acc(earningsNetNoAccrual, NetFrac*Sek, 
+                                    maps_acc(earningsNet, NetFrac*Sek, Acc)));
+
              (#key{type=cost}, #value{sek=Sek}, Acc) ->
                   maps_acc(incVat, VatFrac*Sek,
                            maps_acc(costNet, NetFrac*Sek, Acc));
@@ -183,8 +184,7 @@ handle_call({summary, Year}, _From, #state{dict=Dict, vat=Vat}=State) ->
       end,
       #{},
       Dict),
-
-    {reply, A, State};
+    {reply, Map, State};
 
 handle_call({set_verbose, NewVerbose}, _From, #state{verbose=Verbose}=State) ->
     {reply, {Verbose, NewVerbose}, State#state{verbose=NewVerbose}};
