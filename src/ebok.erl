@@ -24,6 +24,7 @@ help() ->
      "  B                                book print",
      "  S                                summary",
      "  y YEAR                           specify year",
+     "  o ORG_NR                         specify org-nr",
      "  h                                this help",
      "  v INCR                           verbosity change",
      "  l                                load",
@@ -61,7 +62,8 @@ wait_for_termination() ->
         {master :: pid(),
          year=current_year() :: integer(),
          verbose=0 :: integer(),
-         saved="" :: string()
+         saved="" :: string(),
+         orgNr="......-...." :: string()
          }).
 
 %% init/1
@@ -293,16 +295,21 @@ dispatch(["y", Year], State) ->
     %% set year
     {noreply, State#state{year=list_to_integer(Year)}, ?TIMEOUT_ZERO};
 
-dispatch(["x"], #state{year=Year}=State) ->
+dispatch(["o", OrgNr], State) ->
+    %% set org-nr
+    {noreply, State#state{orgNr=OrgNr}, ?TIMEOUT_ZERO};
+
+dispatch(["x"], #state{year=Year, orgNr=OrgNr}=State) ->
     %% generate XML file with VAT details
     Map = backend:summary(Year),
     OutgVat = maps:get(outgVat, Map, ?ZERO),
     IncVat = maps:get(incVat, Map, ?ZERO),
     File = xml_io:generate(Year,
-                    maps:get(earningsNetNoAccrual, Map, ?ZERO),
-                    OutgVat,
-                    IncVat,
-                    OutgVat - IncVat),
+                           OrgNr,
+                           maps:get(earningsNetNoAccrual, Map, ?ZERO),
+                           OutgVat,
+                           IncVat,
+                           OutgVat - IncVat),
     respond("XML VAT report generated to: ~s", [File]),
     {noreply, State, ?TIMEOUT_ZERO};
 

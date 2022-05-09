@@ -8,12 +8,11 @@
 
 
 -define(OUTFILE, "moms-~w.xml").
--define(ORG_NR, "500112-9336").
 
 %% ====================================================================
 %% API functions
 %% ====================================================================
--export([generate/5]).
+-export([generate/6]).
 
 
 
@@ -21,8 +20,8 @@
 %% Internal functions
 %% ====================================================================
 
-generate(Year, ForsMomsEjAnnan, MomsUtgHog, MomsIngAvdr, MomsBetala) ->
-    OrgNrE = make_element('OrgNr', ?ORG_NR),
+generate(Year, OrgNr, ForsMomsEjAnnan, MomsUtgHog, MomsIngAvdr, MomsBetala) ->
+    OrgNrE = make_element('OrgNr', OrgNr),
     PeriodE = make_element('Period', io_lib:format("~w12", [Year])),
     ForsMomsEjAnnanE = make_element('ForsMomsEjAnnan', ForsMomsEjAnnan),
     MomsUtgHogE = make_element('MomsUtgHog', MomsUtgHog),
