@@ -77,13 +77,13 @@ tell() ->
 -type day() :: 1..31.
 
 -record(key,
-        {seq :: {year(), integer()},
-         date :: {month(), day()},
-         type :: cost|earnings|accrual
+        {seq :: {year(), integer()}
         }).
 
 -record(value,
-        {sek :: float(),
+        {date :: {month(), day()},
+         type :: cost|earnings|accrual,
+         sek :: float(),
          comment="" :: string()
         }
        ).
@@ -127,26 +127,14 @@ init([Master, Dir, Vat]) ->
 	Reason :: term().
 %% ====================================================================
 
-handle_call({book, earnings, {Y, M, D}, Amount, Comment}, _From, #state{dict=Dict}=State) ->
-    Seq = {Y, get_next_number(Dict, Y)},
-    Key = #key{seq=Seq, date={M, D}, type=earnings},
-    CommentJoined = string:join(Comment, " "),
-    NewDict = orddict:store(Key, #value{sek=Amount, comment=CommentJoined}, Dict),
-    {reply, ok, State#state{dict=NewDict}};
+handle_call({book, earnings, {Y, M, D}, Amount, Comment}, _From, State) ->
+    do_book(earnings, {Y, M, D}, Amount, Comment, State);
 
-handle_call({book, cost, {Y, M, D}, Amount, Comment}, _From, #state{dict=Dict}=State) ->
-    Seq = {Y, get_next_number(Dict, Y)},
-    Key = #key{seq=Seq, date={M, D}, type=cost},
-    CommentJoined = string:join(Comment, " "),
-    NewDict = orddict:store(Key, #value{sek=Amount, comment=CommentJoined}, Dict),
-    {reply, ok, State#state{dict=NewDict}};
+handle_call({book, cost, {Y, M, D}, Amount, Comment}, _From, State) ->
+    do_book(cost, {Y, M, D}, Amount, Comment, State);
 
-handle_call({book, accrual, {Y, M, D}, Amount, Comment}, _From, #state{dict=Dict}=State) ->
-    Seq = {Y, get_next_number(Dict, Y)},
-    Key = #key{seq=Seq, date={M, D}, type=accrual},
-    CommentJoined = string:join(Comment, " "),
-    NewDict = orddict:store(Key, #value{sek=Amount, comment=CommentJoined}, Dict),
-    {reply, ok, State#state{dict=NewDict}};
+handle_call({book, accrual, {Y, M, D}, Amount, Comment}, _From, State) ->
+    do_book(accrual, {Y, M, D}, Amount, Comment, State);
 
 handle_call({get_book, Year}, _From, #state{dict=Dict}=State) ->
     Result =
@@ -154,8 +142,8 @@ handle_call({get_book, Year}, _From, #state{dict=Dict}=State) ->
           orddict:fold(
             fun(#key{seq={Y, _}}, _, Acc) when Y =/= Year ->
                     Acc;
-               (#key{seq=Seq, date=Date, type=Type}, #value{sek=Sek, comment=Comment}, Acc) ->
-                    [{Seq, Date, Type, Sek, Comment}|Acc]
+               (#key{seq=Seq}, #value{date=Date, type=Type, sek=Amount, comment=Comment}, Acc) ->
+                    [{Seq, Date, Type, Amount, Comment}|Acc]
             end,
             [],
             Dict)),
@@ -168,22 +156,23 @@ handle_call({summary, Year}, _From, #state{dict=Dict, vat=Vat}=State) ->
         orddict:fold(
           fun(#key{seq={Y, _}}, _, Acc) when Y =/= Year ->
                   Acc;
-             (#key{type=earnings}, #value{sek=Sek}, Acc) ->
+             
+             (#key{}, #value{type=earnings, sek=Sek}, Acc) ->
                   maps_acc(outgVat, VatFrac*Sek,
                            maps_acc(earningsNetNoAccrual, NetFrac*Sek, 
                                     maps_acc(earningsNet, NetFrac*Sek, Acc)));
-
-             (#key{type=cost}, #value{sek=Sek}, Acc) ->
+             
+             (#key{}, #value{type=cost, sek=Sek}, Acc) ->
                   maps_acc(incVat, VatFrac*Sek,
                            maps_acc(costNet, NetFrac*Sek, Acc));
              
              %% handle non-default VAT costs here when needed
-
-         (#key{type=accrual}, #value{sek=Sek}, Acc) ->
-              maps_acc(earningsNet, Sek, Acc)
-      end,
-      #{},
-      Dict),
+             
+             (#key{}, #value{type=accrual, sek=Sek}, Acc) ->
+                  maps_acc(earningsNet, Sek, Acc)
+          end,
+          #{},
+          Dict),
     {reply, Map, State};
 
 handle_call({set_verbose, NewVerbose}, _From, #state{verbose=Verbose}=State) ->
@@ -227,6 +216,13 @@ handle_call(stop, _From, State) ->
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
+
+do_book(Type, {Y, M, D}, Amount, Comment, #state{dict=Dict}=State) ->   
+    Seq = {Y, get_next_number(Dict, Y)},
+    Key = #key{seq=Seq},
+    CommentJoined = string:join(Comment, " "),
+    NewDict = orddict:store(Key, #value{date={M, D}, type=Type, sek=Amount, comment=CommentJoined}, Dict),
+    {reply, ok, State#state{dict=NewDict}}.
 
 
 %% handle_cast/2
