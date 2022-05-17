@@ -68,7 +68,7 @@ tell() ->
         {master :: pid(),
          dict=orddict:new(),
          dir="" :: string(),
-         verbose=0 :: integer(),
+         verbose=1 :: integer(),
          vat=0.0 :: float()
         }).
 
@@ -192,6 +192,7 @@ handle_call(save, _From, #state{dir=Dir, dict=Dict}=State) ->
           ignore,
           Dict),
         file:close(Stream),
+        ebok:verbose(1, State, "saved: ~s", [Path]),
         {reply, ok, State}
     catch
         X:Y:Stack ->
@@ -203,6 +204,7 @@ handle_call(load, _From, #state{dir=Dir}=State) ->
         Path = filename:join(Dir, get_basename(Dir, 0)),
         {ok, Stream} = file:open(Path, [read]),
         Dict = dict_from_stream(Stream, orddict:new()),
+        ebok:verbose(1, State, "loaded:  ~s", [Path]),
         {reply, ok, State#state{dict=Dict}}
     catch
         X:Y:Stack ->
@@ -265,7 +267,7 @@ handle_info(_Info, State) ->
 			| term().
 %% ====================================================================
 terminate(Reason, State) ->
-    verbose(State, "~p stopping, reason: ~p", [?MODULE, Reason]).
+    ebok:verbose(2, State, "~p stopping, reason: ~p", [?MODULE, Reason]).
 
 
 %% code_change/3
@@ -324,12 +326,4 @@ get_basename(Dir, Incr) ->
               0,
               Names),
             lists:flatten(io_lib:format("~s~4..0w", [?FILE_PREFIX, Highest+Incr]))                       
-    end.
-
-verbose(State, Format, Data) ->
-    if
-        State#state.verbose < 1 ->
-            ok;
-        true ->
-            io:fwrite(Format++"~n", Data)
     end.

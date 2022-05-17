@@ -11,7 +11,7 @@
 %% ====================================================================
 -export([ebok/1]).
 
--export([respond/1, respond/2]).
+-export([respond/1, respond/2, verbose/4]).
 
 -define(VAT, 25.0).
 -define(ZERO, 0.0).
@@ -61,7 +61,7 @@ wait_for_termination() ->
 -record(state,
         {master :: pid(),
          year=current_year() :: integer(),
-         verbose=0 :: integer(),
+         verbose=1 :: integer(),
          saved="" :: string(),
          orgNr="......-...." :: string()
          }).
@@ -140,11 +140,7 @@ handle_cast(_Msg, State) ->
 
 handle_info(timeout, #state{saved=Saved, year=Year}=State) ->
     Lexemes = get_input(Saved, Year),
-    if
-        State#state.verbose > 0 ->
-            respond("Input: ~p", [Lexemes]);
-        true -> ok
-    end,
+    verbose(2, State, "user input: ~p", [Lexemes]),
     try
         dispatch(Lexemes, State)
     catch
@@ -206,15 +202,9 @@ dispatch([], State) ->
 dispatch(["h"], #state{verbose=Verbose}=State) ->
     %% help
     lists:foreach(fun(S) -> respond(S) end, help()),
-    
-    if
-        Verbose > 0 ->
-            respond("~p", [State]),
-            BackendState = backend:tell(),
-            respond("backend: ~p", [BackendState]);
-        true ->
-            ok
-    end,
+%%     respond("~p", [State]),
+%%     BackendState = backend:tell(),
+%%     respond("backend: ~p", [BackendState]),
     {noreply, State, ?TIMEOUT_ZERO};
 
 dispatch(["q"], #state{saved="* "}=State) ->
@@ -234,6 +224,7 @@ dispatch(["v", Incr], #state{verbose=Verbose}=State) ->
     %% update verbosity
     NewVerbose = Verbose + list_to_integer(Incr),
     backend:set_verbose(NewVerbose),
+    respond("verbosity: ~w -> ~w", [Verbose, NewVerbose]),
     {noreply, State#state{verbose=NewVerbose}, ?TIMEOUT_ZERO};
 
 dispatch(["l"], State) ->
@@ -353,3 +344,15 @@ current_year() ->
         calendar:system_time_to_local_time(
           erlang:system_time(seconds), seconds),
     Year.
+
+
+%%% Print message when the verbosity level is equal or greater than
+%%% the Level argument.
+verbose(Level, State, Format, Data) ->
+    if
+        State#state.verbose < Level ->
+            ok;
+        true ->
+            io:fwrite(Format++"~n", Data)
+    end.
+
