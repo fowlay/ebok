@@ -16,9 +16,13 @@
 -define(VAT, 25.0).
 -define(ZERO, 0.0).
 
+-define(VERSION, "1.1 (2023-05-08)").
+
 
 help() ->
-    ["  c MON DAY AMT COMMENT...         book cost",
+    ["Version: " ++ ?VERSION,
+     "",
+     "  c MON DAY AMT COMMENT...         book cost",
      "  e MON DAY AMT COMMENT...         book earnings",
      "  a MON DAY SIGNED_AMT COMMENT...  book accrual",
      "  B                                book print",
@@ -329,11 +333,13 @@ print_book(B) ->
 
 print_summary(R) ->
     respond("summary:~n"
-            "earnings net: ~.2f~n"
-            "    outg VAT: ~.2f~n"
-            "    cost net: ~.2f~n"
-            "     inc VAT: ~.2f~n",
+            "earnings w accrual: ~.2f~n"
+            "earnings noaccrual: ~.2f~n"
+            "      outgoing VAT: ~.2f~n"
+            "          cost net: ~.2f~n"
+            "       incoming VAT: ~.2f~n",
             [float(maps:get(earningsNet, R, ?ZERO)),
+             float(maps:get(earningsNetNoAccrual, R, ?ZERO)),
              float(maps:get(outgVat, R, ?ZERO)),
              float(maps:get(costNet, R, ?ZERO)),
              float(maps:get(incVat, R, ?ZERO))
