@@ -13,16 +13,18 @@
 
 -export([respond/1, respond/2, verbose/4]).
 
--define(VAT, 25.0).
+-define(TVAT, 6.0). % travel, books
+-define(VAT, 25.0). % everything else
 -define(ZERO, 0.0).
 
--define(VERSION, "1.1 (2023-05-08)").
+-define(VERSION, "1.2 (2024-03-26)").
 
 
 help() ->
     ["Version: " ++ ?VERSION,
      "",
-     "  c MON DAY AMT COMMENT...         book cost",
+     "  c MON DAY AMT COMMENT...         book cost (including 25% VAT)",
+     "  t MON DAY AMT COMMENT...         book cost (including 6% VAT)",
      "  e MON DAY AMT COMMENT...         book earnings",
      "  a MON DAY SIGNED_AMT COMMENT...  book accrual",
      "  B                                book print",
@@ -83,7 +85,7 @@ wait_for_termination() ->
 	Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 init([Master, Dir]) ->
-    case backend:start(self(), Dir, ?VAT) of
+    case backend:start(self(), Dir, ?VAT, ?TVAT) of
         {error, Reason} ->
             respond("fatal: ~p", [Reason]),
             {stop, Reason};
@@ -203,7 +205,7 @@ get_input(Saved, Year) ->
 dispatch([], State) ->
     {noreply, State, ?TIMEOUT_ZERO};
 
-dispatch(["h"], #state{verbose=Verbose}=State) ->
+dispatch(["h"], #state{verbose=_Verbose}=State) ->
     %% help
     lists:foreach(fun(S) -> respond(S) end, help()),
 %%     respond("~p", [State]),
@@ -259,11 +261,19 @@ dispatch(["e", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
     {noreply, State#state{saved="* "}, ?TIMEOUT_ZERO};
 
 dispatch(["c", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
-    %% book a cost
+    %% book a cost that includes 25% VAT
     Month = list_to_integer(MonthS),
     Day = list_to_integer(DayS),
     Amount = string_to_float(AmountS),
     backend:book(cost, Year, Month, Day, Amount, Comment),
+    {noreply, State#state{saved="* "}, ?TIMEOUT_ZERO};
+
+dispatch(["t", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
+    %% book a cost that includes 6% VAT
+    Month = list_to_integer(MonthS),
+    Day = list_to_integer(DayS),
+    Amount = string_to_float(AmountS),
+    backend:book(tcost, Year, Month, Day, Amount, Comment),
     {noreply, State#state{saved="* "}, ?TIMEOUT_ZERO};
 
 dispatch(["a", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->

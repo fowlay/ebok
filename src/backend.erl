@@ -9,7 +9,7 @@
 %% ====================================================================
 %% API functions
 %% ====================================================================
--export([start/3,
+-export([start/4,
          load/0,
          save/0,
          stop/0,
@@ -22,8 +22,8 @@
 -define(SERVER, ?MODULE).
 -define(FILE_PREFIX, "ebok-").
 
-start(Master, Dir, Vat) ->
-    gen_server:start({local, ?SERVER}, ?MODULE, [Master, Dir, Vat], []).
+start(Master, Dir, Vat, Tvat) ->
+    gen_server:start({local, ?SERVER}, ?MODULE, [Master, Dir, Vat, Tvat], []).
 
 load() ->
     gen_server:call(?SERVER, load).
@@ -42,6 +42,10 @@ book(earnings, Year, Month, Day, Amount, Comment) ->
 book(cost, Year, Month, Day, Amount, Comment) ->
     Sek = Amount,
     gen_server:call(?SERVER, {book, cost, {Year, Month, Day}, Sek, Comment});
+
+book(tcost, Year, Month, Day, Amount, Comment) ->
+    Sek = Amount,
+    gen_server:call(?SERVER, {book, tcost, {Year, Month, Day}, Sek, Comment});
 
 book(accrual, Year, Month, Day, Amount, Comment) ->
     Sek = Amount,
@@ -69,7 +73,8 @@ tell() ->
          dict=orddict:new(),
          dir="" :: string(),
          verbose=1 :: integer(),
-         vat=0.0 :: float()
+         vat=0.0 :: float(),
+         tvat=0.0 :: float()
         }).
 
 -type year() :: integer().
@@ -100,12 +105,12 @@ tell() ->
 	State :: term(),
 	Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
-init([Master, Dir, Vat]) ->
+init([Master, Dir, Vat, Tvat]) ->
     case filelib:is_dir(Dir) of
         false ->
             {stop, {not_a_directory, Dir}};
         true ->
-            {ok, #state{master=Master, dir=Dir, vat=Vat}}
+            {ok, #state{master=Master, dir=Dir, vat=Vat, tvat=Tvat}}
     end.
 
 
@@ -133,6 +138,9 @@ handle_call({book, earnings, {Y, M, D}, Amount, Comment}, _From, State) ->
 handle_call({book, cost, {Y, M, D}, Amount, Comment}, _From, State) ->
     do_book(cost, {Y, M, D}, Amount, Comment, State);
 
+handle_call({book, tcost, {Y, M, D}, Amount, Comment}, _From, State) ->
+    do_book(tcost, {Y, M, D}, Amount, Comment, State);
+
 handle_call({book, accrual, {Y, M, D}, Amount, Comment}, _From, State) ->
     do_book(accrual, {Y, M, D}, Amount, Comment, State);
 
@@ -149,9 +157,11 @@ handle_call({get_book, Year}, _From, #state{dict=Dict}=State) ->
             Dict)),
     {reply, Result, State};
 
-handle_call({summary, Year}, _From, #state{dict=Dict, vat=Vat}=State) ->
+handle_call({summary, Year}, _From, #state{dict=Dict, vat=Vat, tvat=Tvat}=State) ->
     VatFrac = Vat/(100.0 + Vat),
     NetFrac = 100.0/(100.0 + Vat),
+    TvatFrac = Tvat/(100.0 + Tvat),
+    TnetFrac = 100.0/(100.0 + Tvat),
     Map =
         orddict:fold(
           fun(#key{seq={Y, _}}, _, Acc) when Y =/= Year ->
@@ -166,7 +176,9 @@ handle_call({summary, Year}, _From, #state{dict=Dict, vat=Vat}=State) ->
                   maps_acc(incVat, VatFrac*Sek,
                            maps_acc(costNet, NetFrac*Sek, Acc));
              
-             %% handle non-default VAT costs here when needed
+             (#key{}, #value{type=tcost, sek=Sek}, Acc) ->
+                  maps_acc(incVat, TvatFrac*Sek,
+                           maps_acc(costNet, TnetFrac*Sek, Acc));
              
              (#key{}, #value{type=accrual, sek=Sek}, Acc) ->
                   maps_acc(earningsNet, Sek, Acc)

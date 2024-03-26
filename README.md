@@ -33,7 +33,11 @@ Print details for the year in focus.
 
 ### c MONTH DAY AMOUNT COMMENT... - book cost
 
-Book a cost (the amount shall include VAT).
+Book a cost (the amount shall include 25% VAT).
+
+### t MONTH DAY AMOUNT COMMENT... - book cost
+
+Book a cost (the amount shall include 6% VAT, e.g. travel cost).
 
 ### e MONTH DAY AMOUNT COMMENT... - book earning
 
