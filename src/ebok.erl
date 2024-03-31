@@ -17,7 +17,7 @@
 -define(VAT, 25.0). % everything else
 -define(ZERO, 0.0).
 
--define(VERSION, "1.2 (2024-03-26)").
+-define(VERSION, "1.3 (2024-03-29)").
 
 
 help() ->
@@ -25,7 +25,8 @@ help() ->
      "",
      "  c MON DAY AMT COMMENT...         book cost (including 25% VAT)",
      "  t MON DAY AMT COMMENT...         book cost (including 6% VAT)",
-     "  e MON DAY AMT COMMENT...         book earnings",
+     "  e MON DAY AMT COMMENT...         book earnings (25% VAT included)",
+     "  u MON DAY AMT COMMENT...         book earnings (6% VAT included)",
      "  a MON DAY SIGNED_AMT COMMENT...  book accrual",
      "  B                                book print",
      "  S                                summary",
@@ -253,11 +254,19 @@ dispatch(["s"], State) ->
     end;
 
 dispatch(["e", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
-    %% book earnings
+    %% book earnings, 25% VAT included
     Month = list_to_integer(MonthS),
     Day = list_to_integer(DayS),
     Amount = string_to_float(AmountS),
     backend:book(earnings, Year, Month, Day, Amount, Comment),
+    {noreply, State#state{saved="* "}, ?TIMEOUT_ZERO};
+
+dispatch(["u", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
+    %% book earnings, 6% VAT included
+    Month = list_to_integer(MonthS),
+    Day = list_to_integer(DayS),
+    Amount = string_to_float(AmountS),
+    backend:book(uearnings, Year, Month, Day, Amount, Comment),
     {noreply, State#state{saved="* "}, ?TIMEOUT_ZERO};
 
 dispatch(["c", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->

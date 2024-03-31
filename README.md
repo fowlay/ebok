@@ -39,11 +39,18 @@ Book a cost (the amount shall include 25% VAT).
 
 Book a cost (the amount shall include 6% VAT, e.g. travel cost).
 
-### e MONTH DAY AMOUNT COMMENT... - book earning
+### e MONTH DAY AMOUNT COMMENT... - book earning (25% VAT)
+
+Book an earning. Use the invoice date, don't use the date when
+payment happens. Specify the amount including 25% VAT.
+
+### u MONTH DAY AMOUNT COMMENT... - book earning (6% VAT)
+
+Book an earning. Use the invoice date, don't use the date when
+payment happens. Specify the amount including 6% VAT.
 
 Book an earning. Use the invoice date, don't use the date when
 payment happens. Specify the amount including VAT.
-
 ### a MONTH DAY SIGNED_AMOUNT COMMENT... - book accrual
 
 The invoice for December Y1 work is split into a net earning and a

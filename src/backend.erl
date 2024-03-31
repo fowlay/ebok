@@ -4,7 +4,7 @@
 
 -module(backend).
 -behaviour(gen_server).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
 %% ====================================================================
 %% API functions
@@ -34,22 +34,8 @@ save() ->
 stop() ->
     gen_server:call(?SERVER, stop).
 
-book(earnings, Year, Month, Day, Amount, Comment) ->
-    %% Amount is SEK, VAT included
-    Sek = Amount,
-    gen_server:call(?SERVER, {book, earnings, {Year, Month, Day}, Sek, Comment});
-
-book(cost, Year, Month, Day, Amount, Comment) ->
-    Sek = Amount,
-    gen_server:call(?SERVER, {book, cost, {Year, Month, Day}, Sek, Comment});
-
-book(tcost, Year, Month, Day, Amount, Comment) ->
-    Sek = Amount,
-    gen_server:call(?SERVER, {book, tcost, {Year, Month, Day}, Sek, Comment});
-
-book(accrual, Year, Month, Day, Amount, Comment) ->
-    Sek = Amount,
-    gen_server:call(?SERVER, {book, accrual, {Year, Month, Day}, Sek, Comment}).
+book(Type, Year, Month, Day, Amount, Comment) ->
+    gen_server:call(?SERVER, {book, Type, {Year, Month, Day}, Amount, Comment}).
 
 get_book(Year) ->
     gen_server:call(?SERVER, {get_book, Year}).
@@ -132,17 +118,13 @@ init([Master, Dir, Vat, Tvat]) ->
 	Reason :: term().
 %% ====================================================================
 
-handle_call({book, earnings, {Y, M, D}, Amount, Comment}, _From, State) ->
-    do_book(earnings, {Y, M, D}, Amount, Comment, State);
-
-handle_call({book, cost, {Y, M, D}, Amount, Comment}, _From, State) ->
-    do_book(cost, {Y, M, D}, Amount, Comment, State);
-
-handle_call({book, tcost, {Y, M, D}, Amount, Comment}, _From, State) ->
-    do_book(tcost, {Y, M, D}, Amount, Comment, State);
-
-handle_call({book, accrual, {Y, M, D}, Amount, Comment}, _From, State) ->
-    do_book(accrual, {Y, M, D}, Amount, Comment, State);
+handle_call({book, Type, {Y, M, D}, Amount, Comment}, _From, State) when
+    Type =:= earnings orelse
+    Type =:= uearnings orelse
+    Type =:= cost orelse
+    Type =:= tcost orelse
+    Type =:= accrual ->
+    do_book(Type, {Y, M, D}, Amount, Comment, State);
 
 handle_call({get_book, Year}, _From, #state{dict=Dict}=State) ->
     Result =
@@ -171,6 +153,11 @@ handle_call({summary, Year}, _From, #state{dict=Dict, vat=Vat, tvat=Tvat}=State)
                   maps_acc(outgVat, VatFrac*Sek,
                            maps_acc(earningsNetNoAccrual, NetFrac*Sek, 
                                     maps_acc(earningsNet, NetFrac*Sek, Acc)));
+
+             (#key{}, #value{type=uearnings, sek=Sek}, Acc) ->
+                  maps_acc(outgVat, TvatFrac*Sek,
+                           maps_acc(earningsNetNoAccrual, TnetFrac*Sek, 
+                                    maps_acc(earningsNet, TnetFrac*Sek, Acc)));
              
              (#key{}, #value{type=cost, sek=Sek}, Acc) ->
                   maps_acc(incVat, VatFrac*Sek,
@@ -227,7 +214,8 @@ handle_call(stop, _From, State) ->
     Reply = stopped,
     {stop, normal, Reply, State};
 
-handle_call(_Request, _From, State) ->
+handle_call(Request, _From, State) ->
+    io:fwrite(standard_error, "cannot handle: ~p~n", [Request]),
     Reply = ok,
     {reply, Reply, State}.
 
@@ -280,19 +268,6 @@ handle_info(_Info, State) ->
 %% ====================================================================
 terminate(Reason, State) ->
     ebok:verbose(2, State, "~p stopping, reason: ~p", [?MODULE, Reason]).
-
-
-%% code_change/3
-%% ====================================================================
-%% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:code_change-3">gen_server:code_change/3</a>
--spec code_change(OldVsn, State :: term(), Extra :: term()) -> Result when
-	Result :: {ok, NewState :: term()} | {error, Reason :: term()},
-	OldVsn :: Vsn | {down, Vsn},
-	Vsn :: term().
-%% ====================================================================
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
-
 
 %% ====================================================================
 %% Internal functions
