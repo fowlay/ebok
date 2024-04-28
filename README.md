@@ -35,6 +35,10 @@ Print details for the year in focus.
 
 Book a cost (the amount shall include 25% VAT).
 
+### f MONTH DAY AMOUNT COMMENT... - book cost
+
+Book a cost (the amount shall include 12% VAT).
+
 ### t MONTH DAY AMOUNT COMMENT... - book cost
 
 Book a cost (the amount shall include 6% VAT, e.g. travel cost).
@@ -43,6 +47,11 @@ Book a cost (the amount shall include 6% VAT, e.g. travel cost).
 
 Book an earning. Use the invoice date, don't use the date when
 payment happens. Specify the amount including 25% VAT.
+
+### g MONTH DAY AMOUNT COMMENT... - book earning (25% VAT)
+
+Book an earning. Use the invoice date, don't use the date when
+payment happens. Specify the amount including 12% VAT.
 
 ### u MONTH DAY AMOUNT COMMENT... - book earning (6% VAT)
 

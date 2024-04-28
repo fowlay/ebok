@@ -13,19 +13,22 @@
 
 -export([respond/1, respond/2, verbose/4]).
 
--define(TVAT, 6.0). % travel, books
--define(VAT, 25.0). % everything else
+-define(TVAT, 6.0).  % travel, books
+-define(FVAT, 12.0). % food
+-define(VAT, 25.0).  % everything else
 -define(ZERO, 0.0).
 
--define(VERSION, "1.3 (2024-03-29)").
+-define(VERSION, "1.4 (2024-04-28)").
 
 
 help() ->
     ["Version: " ++ ?VERSION,
      "",
      "  c MON DAY AMT COMMENT...         book cost (including 25% VAT)",
+     "  f MON DAY AMT COMMENT...         book cost (including 12% VAT)",
      "  t MON DAY AMT COMMENT...         book cost (including 6% VAT)",
      "  e MON DAY AMT COMMENT...         book earnings (25% VAT included)",
+     "  g MON DAY AMT COMMENT...         book earnings (12% VAT included)",
      "  u MON DAY AMT COMMENT...         book earnings (6% VAT included)",
      "  a MON DAY SIGNED_AMT COMMENT...  book accrual",
      "  B                                book print",
@@ -86,7 +89,7 @@ wait_for_termination() ->
 	Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 init([Master, Dir]) ->
-    case backend:start(self(), Dir, ?VAT, ?TVAT) of
+    case backend:start(self(), Dir, ?VAT, ?FVAT, ?TVAT) of
         {error, Reason} ->
             respond("fatal: ~p", [Reason]),
             {stop, Reason};
@@ -261,6 +264,14 @@ dispatch(["e", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
     backend:book(earnings, Year, Month, Day, Amount, Comment),
     {noreply, State#state{saved="* "}, ?TIMEOUT_ZERO};
 
+dispatch(["g", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
+    %% book earnings, 12% VAT included
+    Month = list_to_integer(MonthS),
+    Day = list_to_integer(DayS),
+    Amount = string_to_float(AmountS),
+    backend:book(gearnings, Year, Month, Day, Amount, Comment),
+    {noreply, State#state{saved="* "}, ?TIMEOUT_ZERO};
+
 dispatch(["u", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
     %% book earnings, 6% VAT included
     Month = list_to_integer(MonthS),
@@ -275,6 +286,14 @@ dispatch(["c", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
     Day = list_to_integer(DayS),
     Amount = string_to_float(AmountS),
     backend:book(cost, Year, Month, Day, Amount, Comment),
+    {noreply, State#state{saved="* "}, ?TIMEOUT_ZERO};
+
+dispatch(["f", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
+    %% book a cost that includes 12% VAT
+    Month = list_to_integer(MonthS),
+    Day = list_to_integer(DayS),
+    Amount = string_to_float(AmountS),
+    backend:book(fcost, Year, Month, Day, Amount, Comment),
     {noreply, State#state{saved="* "}, ?TIMEOUT_ZERO};
 
 dispatch(["t", MonthS, DayS, AmountS|Comment], #state{year=Year}=State) ->
@@ -354,14 +373,22 @@ print_summary(R) ->
     respond("summary:~n"
             "earnings w accrual: ~.2f~n"
             "earnings noaccrual: ~.2f~n"
-            "      outgoing VAT: ~.2f~n"
+            "  outgoing VAT 25%: ~.2f~n"
+            "  outgoing VAT 12%: ~.2f~n"
+            "   outgoing VAT 6%: ~.2f~n"
             "          cost net: ~.2f~n"
-            "       incoming VAT: ~.2f~n",
+            "  incoming VAT 25%: ~.2f~n"
+            "  incoming VAT 12%: ~.2f~n"
+            "   incoming VAT 6%: ~.2f~n",
             [float(maps:get(earningsNet, R, ?ZERO)),
              float(maps:get(earningsNetNoAccrual, R, ?ZERO)),
-             float(maps:get(outgVat, R, ?ZERO)),
+             float(maps:get(outgVat25, R, ?ZERO)),
+             float(maps:get(outgVat12, R, ?ZERO)),
+             float(maps:get(outgVat6, R, ?ZERO)),
              float(maps:get(costNet, R, ?ZERO)),
-             float(maps:get(incVat, R, ?ZERO))
+             float(maps:get(incVat25, R, ?ZERO)),
+             float(maps:get(incVat12, R, ?ZERO)),
+             float(maps:get(incVat6, R, ?ZERO))
             ]).
 
 current_year() ->

@@ -9,7 +9,7 @@
 %% ====================================================================
 %% API functions
 %% ====================================================================
--export([start/4,
+-export([start/5,
          load/0,
          save/0,
          stop/0,
@@ -22,8 +22,8 @@
 -define(SERVER, ?MODULE).
 -define(FILE_PREFIX, "ebok-").
 
-start(Master, Dir, Vat, Tvat) ->
-    gen_server:start({local, ?SERVER}, ?MODULE, [Master, Dir, Vat, Tvat], []).
+start(Master, Dir, Vat, Fvat, Tvat) ->
+    gen_server:start({local, ?SERVER}, ?MODULE, [Master, Dir, Vat, Fvat, Tvat], []).
 
 load() ->
     gen_server:call(?SERVER, load).
@@ -60,6 +60,7 @@ tell() ->
          dir="" :: string(),
          verbose=1 :: integer(),
          vat=0.0 :: float(),
+         fvat=0.0 :: float(),
          tvat=0.0 :: float()
         }).
 
@@ -91,12 +92,12 @@ tell() ->
 	State :: term(),
 	Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
-init([Master, Dir, Vat, Tvat]) ->
+init([Master, Dir, Vat, Fvat, Tvat]) ->
     case filelib:is_dir(Dir) of
         false ->
             {stop, {not_a_directory, Dir}};
         true ->
-            {ok, #state{master=Master, dir=Dir, vat=Vat, tvat=Tvat}}
+            {ok, #state{master=Master, dir=Dir, vat=Vat, fvat=Fvat, tvat=Tvat}}
     end.
 
 
@@ -139,9 +140,11 @@ handle_call({get_book, Year}, _From, #state{dict=Dict}=State) ->
             Dict)),
     {reply, Result, State};
 
-handle_call({summary, Year}, _From, #state{dict=Dict, vat=Vat, tvat=Tvat}=State) ->
+handle_call({summary, Year}, _From, #state{dict=Dict, vat=Vat, fvat=Fvat, tvat=Tvat}=State) ->
     VatFrac = Vat/(100.0 + Vat),
     NetFrac = 100.0/(100.0 + Vat),
+    FvatFrac = Fvat/(100.0 + Fvat),
+    FnetFrac = 100.0/(100.0 + Fvat),
     TvatFrac = Tvat/(100.0 + Tvat),
     TnetFrac = 100.0/(100.0 + Tvat),
     Map =
@@ -150,21 +153,30 @@ handle_call({summary, Year}, _From, #state{dict=Dict, vat=Vat, tvat=Tvat}=State)
                   Acc;
              
              (#key{}, #value{type=earnings, sek=Sek}, Acc) ->
-                  maps_acc(outgVat, VatFrac*Sek,
+                  maps_acc(outgVat25, VatFrac*Sek,
                            maps_acc(earningsNetNoAccrual, NetFrac*Sek, 
                                     maps_acc(earningsNet, NetFrac*Sek, Acc)));
 
+             (#key{}, #value{type=gearnings, sek=Sek}, Acc) ->
+                  maps_acc(outgVat12, FvatFrac*Sek,
+                           maps_acc(fearningsNetNoAccrual, FnetFrac*Sek, 
+                                     maps_acc(earningsNet, FnetFrac*Sek, Acc)));
+
              (#key{}, #value{type=uearnings, sek=Sek}, Acc) ->
-                  maps_acc(outgVat, TvatFrac*Sek,
+                  maps_acc(outgVat6, TvatFrac*Sek,
                            maps_acc(earningsNetNoAccrual, TnetFrac*Sek, 
                                     maps_acc(earningsNet, TnetFrac*Sek, Acc)));
              
              (#key{}, #value{type=cost, sek=Sek}, Acc) ->
-                  maps_acc(incVat, VatFrac*Sek,
+                  maps_acc(incVat25, VatFrac*Sek,
                            maps_acc(costNet, NetFrac*Sek, Acc));
+
+             (#key{}, #value{type=fcost, sek=Sek}, Acc) ->
+                  maps_acc(incVat12, FvatFrac*Sek,
+                           maps_acc(costNet, FnetFrac*Sek, Acc));
              
              (#key{}, #value{type=tcost, sek=Sek}, Acc) ->
-                  maps_acc(incVat, TvatFrac*Sek,
+                  maps_acc(incVat6, TvatFrac*Sek,
                            maps_acc(costNet, TnetFrac*Sek, Acc));
              
              (#key{}, #value{type=accrual, sek=Sek}, Acc) ->
