@@ -73,7 +73,7 @@ wait_for_termination() ->
          year=current_year() :: integer(),
          verbose=1 :: integer(),
          saved="" :: string(),
-         orgNr="......-...." :: string()
+         orgNr="500112-9336" :: string()
          }).
 
 %% init/1
@@ -335,8 +335,8 @@ dispatch(["o", OrgNr], State) ->
 dispatch(["x"], #state{year=Year, orgNr=OrgNr}=State) ->
     %% generate XML file with VAT details
     Map = backend:summary(Year),
-    OutgVat = maps:get(outgVat, Map, ?ZERO),
-    IncVat = maps:get(incVat, Map, ?ZERO),
+    OutgVat = maps:get(outgVat25, Map, ?ZERO),
+    IncVat = maps:get(incVat25, Map, ?ZERO),
     File = xml_io:generate(Year,
                            OrgNr,
                            maps:get(earningsNetNoAccrual, Map, ?ZERO),

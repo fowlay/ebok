@@ -37,7 +37,7 @@ generate(Year, OrgNr, ForsMomsEjAnnan, MomsUtgHog, MomsIngAvdr, MomsBetala) ->
     TopE = #xmlElement{name=eSKDUpload,
                        attributes=[#xmlAttribute{name='Version', value="6.0"}],
                        content=[OrgNrE, MomsE]},
-    Prolog = ["<?xml version='1.0' encoding='utf-8' ?>"],
+    Prolog = ["<?xml version='1.0' encoding='ISO-8859-1'?>"],
     Xml = xmerl:export_simple([TopE], xmerl_xml
                            , [{prolog, Prolog}]
                            ),
