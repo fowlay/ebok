@@ -159,7 +159,7 @@ handle_call({summary, Year}, _From, #state{dict=Dict, vat=Vat, fvat=Fvat, tvat=T
 
              (#key{}, #value{type=gearnings, sek=Sek}, Acc) ->
                   maps_acc(outgVat12, FvatFrac*Sek,
-                           maps_acc(fearningsNetNoAccrual, FnetFrac*Sek, 
+                           maps_acc(earningsNetNoAccrual, FnetFrac*Sek, 
                                      maps_acc(earningsNet, FnetFrac*Sek, Acc)));
 
              (#key{}, #value{type=uearnings, sek=Sek}, Acc) ->
@@ -286,9 +286,12 @@ terminate(Reason, State) ->
 %% ====================================================================
 
 maps_acc(Key, Amount, Map) ->
-    NewAmount = maps:get(Key, Map, 0) + Amount,
-    maps:put(Key, NewAmount, Map).
-
+    case Map of
+        #{Key := Amount0} ->
+            Map#{Key := Amount0 + Amount};
+        _ ->
+            Map#{Key => Amount}
+    end.
 
 get_next_number(Dict, Y) ->
     1 + orddict:fold(

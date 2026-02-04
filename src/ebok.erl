@@ -371,8 +371,8 @@ print_book(B) ->
 
 print_summary(R) ->
     respond("summary:~n"
-            "earnings w accrual: ~.2f~n"
-            "earnings noaccrual: ~.2f~n"
+            "earnings w accrual: ~.2f (VAT excluded)~n"
+            "earnings noaccrual: ~.2f (VAT excluded)~n"
             "  outgoing VAT 25%: ~.2f~n"
             "  outgoing VAT 12%: ~.2f~n"
             "   outgoing VAT 6%: ~.2f~n"
