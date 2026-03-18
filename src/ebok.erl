@@ -4,7 +4,7 @@
 
 -module(ebok).
 -behaviour(gen_server).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
 %% ====================================================================
 %% API functions
@@ -41,9 +41,9 @@ help() ->
      "  s                                save",
      "  q                                quit",
      "  Q                                forced quit",
-    
+
      "  x   XML test"
-     ].
+    ].
 
 ebok([Dir]) ->
     start(Dir),
@@ -74,19 +74,18 @@ wait_for_termination() ->
          verbose=1 :: integer(),
          saved="" :: string(),
          orgNr="500112-9336" :: string()
-         }).
+        }).
 
 %% init/1
 %% ====================================================================
-%% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:init-1">gen_server:init/1</a>
 -spec init(Args :: term()) -> Result when
-	Result :: {ok, State}
-			| {ok, State, Timeout}
-			| {ok, State, hibernate}
-			| {stop, Reason :: term()}
-			| ignore,
-	State :: term(),
-	Timeout :: non_neg_integer() | infinity.
+      Result :: {ok, State}
+              | {ok, State, Timeout}
+              | {ok, State, hibernate}
+              | {stop, Reason :: term()}
+              | ignore,
+      State :: term(),
+      Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 init([Master, Dir]) ->
     case backend:start(self(), Dir, ?VAT, ?FVAT, ?TVAT) of
@@ -101,20 +100,21 @@ init([Master, Dir]) ->
 
 %% handle_call/3
 %% ====================================================================
-%% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:handle_call-3">gen_server:handle_call/3</a>
--spec handle_call(Request :: term(), From :: {pid(), Tag :: term()}, State :: term()) -> Result when
-	Result :: {reply, Reply, NewState}
-			| {reply, Reply, NewState, Timeout}
-			| {reply, Reply, NewState, hibernate}
-			| {noreply, NewState}
-			| {noreply, NewState, Timeout}
-			| {noreply, NewState, hibernate}
-			| {stop, Reason, Reply, NewState}
-			| {stop, Reason, NewState},
-	Reply :: term(),
-	NewState :: term(),
-	Timeout :: non_neg_integer() | infinity,
-	Reason :: term().
+-spec handle_call(Request :: term(),
+                  From :: {pid(), Tag :: term()},
+                  State :: term()) -> Result when
+      Result :: {reply, Reply, NewState}
+              | {reply, Reply, NewState, Timeout}
+              | {reply, Reply, NewState, hibernate}
+              | {noreply, NewState}
+              | {noreply, NewState, Timeout}
+              | {noreply, NewState, hibernate}
+              | {stop, Reason, Reply, NewState}
+              | {stop, Reason, NewState},
+      Reply :: term(),
+      NewState :: term(),
+      Timeout :: non_neg_integer() | infinity,
+      Reason :: term().
 %% ====================================================================
 handle_call(_Request, _From, State) ->
     Reply = ok,
@@ -123,14 +123,13 @@ handle_call(_Request, _From, State) ->
 
 %% handle_cast/2
 %% ====================================================================
-%% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:handle_cast-2">gen_server:handle_cast/2</a>
 -spec handle_cast(Request :: term(), State :: term()) -> Result when
-	Result :: {noreply, NewState}
-			| {noreply, NewState, Timeout}
-			| {noreply, NewState, hibernate}
-			| {stop, Reason :: term(), NewState},
-	NewState :: term(),
-	Timeout :: non_neg_integer() | infinity.
+      Result :: {noreply, NewState}
+              | {noreply, NewState, Timeout}
+              | {noreply, NewState, hibernate}
+              | {stop, Reason :: term(), NewState},
+      NewState :: term(),
+      Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -138,14 +137,13 @@ handle_cast(_Msg, State) ->
 
 %% handle_info/2
 %% ====================================================================
-%% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:handle_info-2">gen_server:handle_info/2</a>
 -spec handle_info(Info :: timeout | term(), State :: term()) -> Result when
-	Result :: {noreply, NewState}
-			| {noreply, NewState, Timeout}
-			| {noreply, NewState, hibernate}
-			| {stop, Reason :: term(), NewState},
-	NewState :: term(),
-	Timeout :: non_neg_integer() | infinity.
+      Result :: {noreply, NewState}
+              | {noreply, NewState, Timeout}
+              | {noreply, NewState, hibernate}
+              | {stop, Reason :: term(), NewState},
+      NewState :: term(),
+      Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 
 handle_info(timeout, #state{saved=Saved, year=Year}=State) ->
@@ -165,29 +163,16 @@ handle_info(_Info, State) ->
 
 %% terminate/2
 %% ====================================================================
-%% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:terminate-2">gen_server:terminate/2</a>
 -spec terminate(Reason, State :: term()) -> Any :: term() when
-	Reason :: normal
-			| shutdown
-			| {shutdown, term()}
-			| term().
+      Reason :: normal
+              | shutdown
+              | {shutdown, term()}
+              | term().
 %% ====================================================================
 terminate(_Reason, #state{master=Master}) ->
     stopped = backend:stop(),
     Master ! stop,
     ok.
-
-
-%% code_change/3
-%% ====================================================================
-%% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:code_change-3">gen_server:code_change/3</a>
--spec code_change(OldVsn, State :: term(), Extra :: term()) -> Result when
-	Result :: {ok, NewState :: term()} | {error, Reason :: term()},
-	OldVsn :: Vsn | {down, Vsn},
-	Vsn :: term().
-%% ====================================================================
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
 
 
 %% ====================================================================
@@ -212,9 +197,9 @@ dispatch([], State) ->
 dispatch(["h"], #state{verbose=_Verbose}=State) ->
     %% help
     lists:foreach(fun(S) -> respond(S) end, help()),
-%%     respond("~p", [State]),
-%%     BackendState = backend:tell(),
-%%     respond("backend: ~p", [BackendState]),
+    %% respond("~p", [State]),
+    %% BackendState = backend:tell(),
+    %% respond("backend: ~p", [BackendState]),
     {noreply, State, ?TIMEOUT_ZERO};
 
 dispatch(["q"], #state{saved="* "}=State) ->
@@ -243,7 +228,7 @@ dispatch(["l"], State) ->
         {nok, Details} ->
             respond("loading failed: ~p", [Details]);
         ok ->
-             {noreply, State#state{saved=""}, ?TIMEOUT_ZERO}
+            {noreply, State#state{saved=""}, ?TIMEOUT_ZERO}
     end;
 
 dispatch(["s"], State) ->
@@ -335,11 +320,13 @@ dispatch(["o", OrgNr], State) ->
 dispatch(["x"], #state{year=Year, orgNr=OrgNr}=State) ->
     %% generate XML file with VAT details
     Map = backend:summary(Year),
-    OutgVat = maps:get(outgVat25, Map, ?ZERO),
-    IncVat = maps:get(incVat25, Map, ?ZERO),
+    EarningsNetNoAccrual =
+        coerce_to_integer(maps:get(earningsNetNoAccrual, Map, ?ZERO)),
+    OutgVat = coerce_to_integer(maps:get(outgVat25, Map, ?ZERO)),
+    IncVat = coerce_to_integer(maps:get(incVat25, Map, ?ZERO)),
     File = xml_io:generate(Year,
                            OrgNr,
-                           maps:get(earningsNetNoAccrual, Map, ?ZERO),
+                           EarningsNetNoAccrual,
                            OutgVat,
                            IncVat,
                            OutgVat - IncVat),
@@ -367,7 +354,7 @@ print_book(B) ->
                       [J, Year, Mon, Day, Type, Sek, Comment])
       end,
       B).
-              
+
 
 print_summary(R) ->
     respond("summary:~n"
@@ -397,6 +384,8 @@ current_year() ->
           erlang:system_time(seconds), seconds),
     Year.
 
+coerce_to_integer(Number) ->
+    trunc(Number + 0.5).
 
 %%% Print message when the verbosity level is equal or greater than
 %%% the Level argument.
