@@ -18,7 +18,7 @@
 -define(VAT, 25.0).  % everything else
 -define(ZERO, 0.0).
 
--define(VERSION, "1.4 (2024-04-28)").
+-define(VERSION, "1.5 (2026-03-19)").
 
 
 help() ->

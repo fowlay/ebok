@@ -1,6 +1,9 @@
 # ebok
 Simple accounting helper.
 
+Maintained using VS Code on Windows, extended with Erlang Language
+Platform.
+
 ## Persistence
 
 Accounting data is kept as text files in a directory. The 'l' command
@@ -75,6 +78,10 @@ in time" from Y2 to Y1.
 
 Save accounting data to a new file. The new high-named file is the
 previous file with new events appended.
+
+### x - write VAT data as XML file
+
+Write VAT data for the current year as an XML file named: moms-YYYY.xml
 
 ### h - help
 
