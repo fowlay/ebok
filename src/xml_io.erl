@@ -7,12 +7,10 @@
 -include_lib("xmerl/include/xmerl.hrl").
 
 
--define(OUTFILE, "moms-~w.xml").
-
 %% ====================================================================
 %% API functions
 %% ====================================================================
--export([generate/6]).
+-export([generate/7]).
 
 
 
@@ -20,7 +18,7 @@
 %% Internal functions
 %% ====================================================================
 
-generate(Year, OrgNr, ForsMomsEjAnnan, MomsUtgHog, MomsIngAvdr, MomsBetala) ->
+generate(VatFile, Year, OrgNr, ForsMomsEjAnnan, MomsUtgHog, MomsIngAvdr, MomsBetala) ->
     OrgNrE = make_element('OrgNr', OrgNr),
     PeriodE = make_element('Period', io_lib:format("~w12", [Year])),
     ForsMomsEjAnnanE = make_element('ForsMomsEjAnnan', ForsMomsEjAnnan),
@@ -40,11 +38,10 @@ generate(Year, OrgNr, ForsMomsEjAnnan, MomsUtgHog, MomsIngAvdr, MomsBetala) ->
     Prolog = ["<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>"],
     Xml = xmerl:export_simple([TopE], xmerl_xml, [{prolog, Prolog}]),
     [$\n | XmlPretty] = lists:flatten(ct_netconfc:format_data(pretty, Xml)),
-    FileName = lists:flatten(io_lib:format(?OUTFILE, [Year])),
-    {ok, Stream} = file:open(FileName, [write]),
+    {ok, Stream} = file:open(VatFile, [write]),
     io:fwrite(Stream, "~s~n", [XmlPretty]),
     file:close(Stream),
-    FileName.
+    VatFile.
 
 make_element(Name, Number) when is_integer(Number) ->
     #xmlElement{name=Name,

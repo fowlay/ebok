@@ -18,10 +18,10 @@
 -define(VAT, 25.0).  % everything else
 -define(ZERO, 0.0).
 
--define(VERSION, "1.5 (2026-03-19)").
+-define(VERSION, "1.6 (2026-03-26)").
 
 
-help() ->
+help(Year) ->
     ["Version: " ++ ?VERSION,
      "",
      "  c MON DAY AMT COMMENT...         book cost (including 25% VAT)",
@@ -41,8 +41,7 @@ help() ->
      "  s                                save",
      "  q                                quit",
      "  Q                                forced quit",
-
-     "  x   XML test"
+     "  x                                write VAT details to: " ++ vat_file(Year)
     ].
 
 ebok([Dir]) ->
@@ -194,9 +193,9 @@ get_input(Saved, Year) ->
 dispatch([], State) ->
     {noreply, State, ?TIMEOUT_ZERO};
 
-dispatch(["h"], #state{verbose=_Verbose}=State) ->
+dispatch(["h"], #state{year=Year}=State) ->
     %% help
-    lists:foreach(fun(S) -> respond(S) end, help()),
+    lists:foreach(fun(S) -> respond(S) end, help(Year)),
     %% respond("~p", [State]),
     %% BackendState = backend:tell(),
     %% respond("backend: ~p", [BackendState]),
@@ -324,7 +323,8 @@ dispatch(["x"], #state{year=Year, orgNr=OrgNr}=State) ->
         coerce_to_integer(maps:get(earningsNetNoAccrual, Map, ?ZERO)),
     OutgVat = coerce_to_integer(maps:get(outgVat25, Map, ?ZERO)),
     IncVat = coerce_to_integer(maps:get(incVat25, Map, ?ZERO)),
-    File = xml_io:generate(Year,
+    File = xml_io:generate(vat_file(Year),
+                           Year,
                            OrgNr,
                            EarningsNetNoAccrual,
                            OutgVat,
@@ -386,6 +386,9 @@ current_year() ->
 
 coerce_to_integer(Number) ->
     trunc(Number + 0.5).
+
+vat_file(Year) ->
+    lists:flatten(io_lib:format("moms-~w.xml", [Year])).
 
 %%% Print message when the verbosity level is equal or greater than
 %%% the Level argument.
